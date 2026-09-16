@@ -1,0 +1,73 @@
+#!/bin/bash
+# legion-set-profile: switch the Lenovo Legion power profile.
+#
+# Installed root-owned as /usr/local/libexec/legion-set-profile. Its polkit
+# policy (com.sykesthelord.legion.set-profile) lets the active local session run
+# it without a password, so it deliberately does as little as possible:
+#
+# * exactly one argument, which must be a platform profile name;
+# * it writes only that name, and only to the kernel's platform profile file;
+# * Performance, Extreme and Custom are refused on battery.
+#
+# It never reads anything from the user's home directory or environment.
+set -euo pipefail
+export PATH=/usr/bin:/bin
+
+fail() {
+  echo "legion-set-profile: $*" >&2
+  exit 1
+}
+
+(( $# == 1 )) || fail "usage: legion-set-profile low-power|balanced|performance|max-power|custom"
+profile=$1
+
+case $profile in
+  low-power | balanced | performance | max-power | custom) ;;
+  *) fail "unknown profile" ;;
+esac
+
+on_external_power() {
+  local supply
+  for supply in /sys/class/power_supply/*; do
+    [[ -r $supply/type && -r $supply/online ]] || continue
+    case $(<"$supply/type") in
+      Mains | USB) [[ $(<"$supply/online") == 1 ]] && return 0 ;;
+    esac
+  done
+  return 1
+}
+
+has_choice() {
+  local file=$1 choice
+  local -a choices=()
+  [[ -r $file ]] || return 1
+  read -ra choices <"$file" || true
+  for choice in "${choices[@]}"; do
+    [[ $choice == "$profile" ]] && return 0
+  done
+  return 1
+}
+
+case $profile in
+  performance | max-power | custom)
+    on_external_power || fail "$profile needs AC power"
+    ;;
+esac
+
+# The legacy /sys/firmware/acpi file refuses "custom" by design; the
+# per-device file passes it through to the driver.
+if [[ $profile == custom ]]; then
+  target=
+  for device in /sys/class/platform-profile/*; do
+    if has_choice "$device/choices"; then
+      target=$device/profile
+      break
+    fi
+  done
+  [[ -n $target ]] || fail "no platform profile device supports custom"
+else
+  has_choice /sys/firmware/acpi/platform_profile_choices || fail "$profile isn't supported by this firmware"
+  target=/sys/firmware/acpi/platform_profile
+fi
+
+printf '%s' "$profile" >"$target"

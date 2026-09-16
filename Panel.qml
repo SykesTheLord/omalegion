@@ -7,8 +7,8 @@ import qs.Ui
 Panel {
   id: root
 
-  moduleName: "tedwester.legion"
-  ipcTarget: "tedwester.legion"
+  moduleName: "sykesthelord.legion"
+  ipcTarget: "sykesthelord.legion"
   manageIpc: false
 
   property var anchorItem: null
@@ -34,6 +34,7 @@ Panel {
     { label: "GPU", key: "gpu" },
     { label: "Battery", key: "battery" },
     { label: "Cooling", key: "cooling" },
+    { label: "Lighting", key: "lighting" },
     { label: "Misc.", key: "misc" }
   ]
 
@@ -57,6 +58,13 @@ Panel {
     pollProc.running = true
   }
 
+  // Commands waiting for controlProc, keyed by action. A Process that is
+  // already running ignores a new command, so without this live changes
+  // (dragging through colors, painting keys) were silently dropped. Only the
+  // latest value per action is kept — intermediate colors don't matter.
+  property var pendingCommands: ({})
+  property var pendingOrder: []
+
   function execCommand(args) {
     var tail = []
     if (Array.isArray(args)) {
@@ -65,6 +73,18 @@ Panel {
     } else if (args !== undefined && args !== null) {
       tail.push(String(args))
     }
+    if (tail.length === 0) return
+    var key = tail[0]
+    if (!(key in root.pendingCommands)) root.pendingOrder.push(key)
+    root.pendingCommands[key] = tail
+    root.drainCommands()
+  }
+
+  function drainCommands() {
+    if (controlProc.running || root.pendingOrder.length === 0) return
+    var key = root.pendingOrder.shift()
+    var tail = root.pendingCommands[key]
+    delete root.pendingCommands[key]
     controlProc.command = ["python3", root.enginePath].concat(tail)
     controlProc.running = true
   }
@@ -158,6 +178,7 @@ Panel {
       waitForEnd: true
       onStreamFinished: if (text) console.log("legion control stderr:", text)
     }
+    onExited: function() { Qt.callLater(root.drainCommands) }
   }
 
   onOpenedChanged: {
@@ -421,6 +442,18 @@ Panel {
 
         CoolingTab {
           visible: root.activeTab === "cooling"
+          height: visible ? implicitHeight : 0
+          width: parent.width
+          d: root.currentData
+          foreground: root.foreground
+          dim: root.dim
+          urgent: root.urgent
+          fontFamily: root.fontFamily
+          run: root.execCommand
+        }
+
+        LightingTab {
+          visible: root.activeTab === "lighting"
           height: visible ? implicitHeight : 0
           width: parent.width
           d: root.currentData

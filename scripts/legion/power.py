@@ -9,13 +9,65 @@ panel profile, and battery panel changes update platform_profile.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from . import state as plugin_state
-from .sysfs import read_text, run_cmd, safe_write
+from .log import get_logger
+from .sysfs import external_power_online, read_int, read_text, run_cmd, safe_write
+
+log = get_logger("power")
 
 PLATFORM_PROFILE = Path("/sys/firmware/acpi/platform_profile")
 PLATFORM_CHOICES = Path("/sys/firmware/acpi/platform_profile_choices")
+PROFILE_CLASS = Path("/sys/class/platform-profile")
+
+
+def _profile_write_path(profile: str) -> Path:
+    """Where to write a profile.
+
+    The legacy /sys/firmware/acpi/platform_profile file refuses "custom" by
+    design (the kernel returns EINVAL there, even though it lists it as a
+    choice). The per-device file passes it through to the driver, which is
+    how lenovo-wmi-gamezone enters Custom mode."""
+    if profile == "custom" and PROFILE_CLASS.is_dir():
+        for device in sorted(PROFILE_CLASS.iterdir()):
+            if "custom" in (read_text(device / "choices") or "").split():
+                return device / "profile"
+    return PLATFORM_PROFILE
+
+
+PROFILE_HELPER = Path("/usr/local/libexec/legion-set-profile")
+
+
+def _helper_trusted() -> bool:
+    # Only use the helper if root owns it and nobody else can change it;
+    # otherwise running it through pkexec would run someone else's code.
+    try:
+        info = PROFILE_HELPER.stat()
+    except OSError:
+        return False
+    return info.st_uid == 0 and not info.st_mode & 0o022
+
+
+def _write_profile(profile: str) -> dict:
+    """Switch profile through the passwordless helper when it's installed,
+    otherwise fall back to a password-prompted write."""
+    if not _helper_trusted():
+        return safe_write(_profile_write_path(profile), profile)
+    try:
+        result = subprocess.run(
+            ["pkexec", str(PROFILE_HELPER), profile],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log.warning("Profile helper failed to run: %s", exc)
+        return {"status": "error", "message": str(exc)}
+    if result.returncode != 0:
+        message = result.stderr.strip() or "The profile helper failed"
+        log.warning("Profile helper rc=%d: %s", result.returncode, message)
+        return {"status": "error", "message": message}
+    return {"status": "success", "method": "helper"}
 
 BATTERY_BLOCKED_PROFILES = frozenset({"performance", "max-power", "custom"})
 
@@ -98,10 +150,7 @@ def _choices() -> list[str]:
 
 
 def _ac_connected() -> bool:
-    for ac in Path("/sys/class/power_supply").glob("AC*"):
-        if read_text(ac / "online") == "1":
-            return True
-    return False
+    return external_power_online()
 
 
 def _get_ppd() -> str | None:
@@ -243,6 +292,7 @@ def get_power() -> dict:
         "available_modes": modes,
         "custom": get_custom_limits(),
         "is_custom": raw == "custom",
+        "limits": get_active_limits(),
     }
 
 
@@ -273,7 +323,7 @@ def set_power(mode: str) -> dict:
         plugin_state.save(st)
         return {"status": "success", "mode": meta.get("label", profile), "profile": profile, "method": "ppd"}
 
-    result = safe_write(PLATFORM_PROFILE, profile)
+    result = _write_profile(profile)
     if result["status"] == "success":
         result["mode"] = meta.get("label", profile)
         result["profile"] = profile
@@ -329,6 +379,33 @@ def get_custom_limits() -> dict:
         "pl1": _ppt_attr("ppt_pl1_spl"),
         "pl2": _ppt_attr("ppt_pl2_sppt"),
     }
+
+
+# Limits Custom mode applies. The firmware sets every other profile's CPU
+# limits without reporting them: these attributes read the same in Quiet,
+# Balanced and Performance, and so do the CPU's own RAPL limits. So they're
+# only presented as "in effect" while Custom is active — switching to Custom
+# does apply them (the GPU's enforced limit changes to follow Custom's GPU
+# power settings: 65 W, or 80 W with the gpu_nv_ppab boost, in testing).
+_CUSTOM_LIMIT_ATTRS = (
+    ("ppt_pl1_spl", "CPU sustained (PL1)", "W"),
+    ("ppt_pl2_sppt", "CPU boost (PL2)", "W"),
+    ("ppt_pl1_tau", "Boost duration", "s"),
+    ("ppt_cpu_cl", "CPU limit with GPU load", "W"),
+    ("cpu_temp", "CPU thermal limit", "°C"),
+    ("gpu_temp", "GPU thermal limit", "°C"),
+)
+
+
+def get_active_limits() -> dict:
+    if not is_custom_mode():
+        return {"cpu_reported": False, "items": []}
+    items = []
+    for name, label, unit in _CUSTOM_LIMIT_ATTRS:
+        value = read_int(FIRMWARE_ATTR / name / "current_value")
+        if value is not None:
+            items.append({"id": name, "label": label, "value": value, "unit": unit})
+    return {"cpu_reported": bool(items), "items": items}
 
 
 def set_ppt(attr: str, value: str) -> dict:

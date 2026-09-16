@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 
@@ -15,6 +16,13 @@ Column {
 
   readonly property var power: d && d.power ? d.power : ({})
   readonly property var custom: power.custom || ({})
+  readonly property var limits: power.limits || ({})
+  readonly property var gpu: d && d.gpu ? d.gpu : ({})
+  readonly property bool gpuLimitKnown: gpu.power_cap_w !== undefined && gpu.power_cap_w !== null
+
+  function watts(value) {
+    return Math.round(value) + " W"
+  }
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(10)
@@ -64,6 +72,80 @@ Column {
         ? "Plug in AC power"
         : (modelData.selected ? "Active" : "Apply " + modelData.label)
       onActivated: root.commandRequested(["--set-power", modelData.profile])
+    }
+  }
+
+  Column {
+    visible: !!power.current_label
+    width: parent.width
+    spacing: Style.space(10)
+
+    Text {
+      textFormat: Text.PlainText
+      text: "Limits in effect"
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: true
+    }
+
+    Text {
+      textFormat: Text.PlainText
+      width: parent.width
+      text: {
+        var bits = []
+        if (power.is_custom)
+          bits.push("These are the limits Custom mode applies.")
+        else
+          bits.push("The firmware sets the CPU's limits for " + (power.current_label || "this profile")
+            + " without reporting them to Linux. Switch to Custom to set and see them.")
+        if (!root.gpuLimitKnown)
+          bits.push("The GPU's limit appears while the NVIDIA GPU is active.")
+        return bits.join(" ")
+      }
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.Wrap
+    }
+
+    GridLayout {
+      columns: 2
+      width: parent.width
+      columnSpacing: Style.space(8)
+      rowSpacing: Style.space(8)
+
+      Repeater {
+        model: {
+          var items = []
+          if (root.gpuLimitKnown) {
+            var bits = []
+            if (gpu.power_draw_w !== undefined && gpu.power_draw_w !== null)
+              bits.push("drawing " + root.watts(gpu.power_draw_w))
+            if (gpu.power_limit_default_w !== undefined && gpu.power_limit_default_w !== null)
+              bits.push("default " + root.watts(gpu.power_limit_default_w))
+            if (gpu.power_limit_max_w !== undefined && gpu.power_limit_max_w !== null)
+              bits.push("max " + root.watts(gpu.power_limit_max_w))
+            items.push({ label: "GPU power limit", value: root.watts(gpu.power_cap_w), subtitle: bits.join(" · ") })
+          }
+          var cpu = limits.items || []
+          for (var i = 0; i < cpu.length; i++)
+            items.push({ label: cpu[i].label, value: cpu[i].value + " " + cpu[i].unit, subtitle: "" })
+          return items
+        }
+        delegate: StatusCard {
+          required property var modelData
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          foreground: root.foreground
+          dim: root.dim
+          accentColor: root.accentColor
+          fontFamily: root.fontFamily
+          label: modelData.label
+          value: modelData.value
+          subtitle: modelData.subtitle
+        }
+      }
     }
   }
 

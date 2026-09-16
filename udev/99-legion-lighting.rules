@@ -1,0 +1,38 @@
+# Grants direct read/write access to Legion keyboard/logo lighting HID
+# interfaces, so lighting changes don't need a pkexec prompt on every
+# effect/color change (unlike other sysfs writes in this plugin, which are
+# infrequent enough that pkexec-per-call is fine).
+#
+# Uses MODE="0666" (matching the approach in every known open-source Legion
+# lighting tool — ite8291r3-ctl, L5P-Keyboard-RGB) rather than
+# TAG+="uaccess": uaccess depends on systemd-logind reacting to the device's
+# udev events to apply a per-session ACL, which in practice doesn't always
+# take effect for a device that was already attached before the rule was
+# installed (and isn't reliable on every setup even after a driver
+# rebind) — a plain mode change applies immediately and unconditionally.
+# The tradeoff is that any local user on the machine gets access, not just
+# the active seat — acceptable for a single-user laptop.
+#
+# Installed to /etc/udev/rules.d/ by the "Install lighting permissions"
+# action in the Lighting tab (via pkexec), then udev is reloaded.
+#
+# Per-key "Spectrum" keyboard (ITE8258), e.g. Legion 7(i)/Pro 7 Gen 9/10.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c197", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c193", MODE="0666"
+
+# 4-zone RGB keyboard (ITE8291/r3), Legion 5/5 Pro/Slim 2020-2024.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="6004", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="6006", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="600b", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="ce00", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c955", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c965", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c963", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c975", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c973", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c985", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c984", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c983", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c995", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c994", MODE="0666"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="c993", MODE="0666"

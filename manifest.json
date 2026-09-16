@@ -1,20 +1,18 @@
 {
   "schemaVersion": 1,
-  "id": "tedwester.legion",
-  "name": "Legion Toolkit",
-  "version": "1.2.0",
-  "author": "tedwester",
+  "id": "sykesthelord.legion",
+  "name": "Legion Control Center",
+  "version": "1.0.0",
+  "author": "sykes",
   "license": "MIT",
-  "description": "Lenovo Legion control center for Omarchy. Power modes synced with the laptop and battery panel, GPU working mode, battery charge modes, always-on USB, and cooling.",
-  "kinds": [
-    "bar-widget"
-  ],
+  "description": "Lenovo Legion control center for Omarchy. Power modes synced with the laptop and battery panel, GPU working mode, battery charge modes, always-on USB, cooling, and keyboard/logo RGB lighting with automatic model detection.",
+  "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Legion Toolkit",
-    "description": "Lenovo Legion power, GPU, battery, and cooling controls.",
+    "displayName": "Legion Control Center",
+    "description": "Lenovo Legion power, GPU, battery, cooling, and RGB lighting controls.",
     "category": "System",
     "aliases": [
       "legion",
@@ -23,7 +21,10 @@
       "fan",
       "thermal",
       "battery",
-      "gpu"
+      "gpu",
+      "rgb",
+      "lighting",
+      "keyboard"
     ],
     "defaultSection": "right",
     "allowMultiple": false,

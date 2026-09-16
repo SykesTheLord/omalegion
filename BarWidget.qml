@@ -5,7 +5,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "tedwester.legion"
+  moduleName: "sykesthelord.legion"
 
   readonly property var panelItem: panelLoader.item
   readonly property bool opened: panelItem ? panelItem.opened === true : false
@@ -61,7 +61,7 @@ BarWidget {
   }
 
   function tooltipText() {
-    if (!panelItem || !panelItem.currentData) return "Legion Toolkit"
+    if (!panelItem || !panelItem.currentData) return "Legion Control Center"
     var p = panelItem.currentData.power || {}
     var t = panelItem.currentData.thermals || {}
     var mode = p.current_label || "Unknown"

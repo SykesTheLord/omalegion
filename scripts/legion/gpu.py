@@ -77,7 +77,8 @@ def _nvidia_smi_query() -> dict | None:
         [
             "nvidia-smi",
             "--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,"
-            "power.draw,power.limit,driver_version,clocks.current.graphics,clocks.current.memory,pstate",
+            "power.draw,power.limit,driver_version,clocks.current.graphics,clocks.current.memory,pstate,"
+            "enforced.power.limit,power.default_limit,power.max_limit",
             "--format=csv,noheader,nounits",
         ],
         timeout=2.5,
@@ -101,7 +102,11 @@ def _nvidia_smi_query() -> dict | None:
         "memory_used_mb": num(3),
         "memory_total_mb": num(4),
         "power_draw_w": num(5),
-        "power_cap_w": num(6),
+        # Laptop GPUs report power.limit as [N/A]; the enforced limit is the
+        # one in effect, and it follows the Legion power profile.
+        "power_cap_w": num(11) if num(11) is not None else num(6),
+        "power_limit_default_w": num(12),
+        "power_limit_max_w": num(13),
         "driver": parts[7],
         "clock_core_mhz": num(8, int),
         "clock_memory_mhz": num(9, int) if len(parts) > 9 else None,
@@ -244,6 +249,8 @@ def get_gpu() -> dict:
         "memory_total_mb": (smi or {}).get("memory_total_mb"),
         "power_draw_w": (smi or {}).get("power_draw_w"),
         "power_cap_w": (smi or {}).get("power_cap_w"),
+        "power_limit_default_w": (smi or {}).get("power_limit_default_w"),
+        "power_limit_max_w": (smi or {}).get("power_limit_max_w"),
         "driver": (smi or {}).get("driver"),
         "clock_core_mhz": (smi or {}).get("clock_core_mhz"),
         "clock_memory_mhz": (smi or {}).get("clock_memory_mhz"),

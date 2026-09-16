@@ -20,6 +20,12 @@ venv/
 .idea/
 .vscode/
 
+# Per-user Claude Code settings (permissions granted on this machine)
+.claude/settings.local.json
+
+# Logs from local testing
+*.log
+
 # Local test / scratch
 /tests/scratch/
 .local/

@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from . import state as plugin_state
-from .sysfs import first_existing, read_text, safe_write
+from .sysfs import external_power_online, first_existing, read_text, safe_write
 
 IDEAPAD = Path("/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00")
 NIGHT_START, NIGHT_END = 22, 7
@@ -173,9 +173,7 @@ def get_battery() -> dict:
         power = read_text(bat_dir / "power_now")
         bat["power_now_w"] = round(int(power) / 1_000_000, 2) if power and power.isdigit() else None
 
-    for ac in Path("/sys/class/power_supply").glob("AC*"):
-        bat["ac_connected"] = read_text(ac / "online") == "1"
-        break
+    bat["ac_connected"] = external_power_online()
 
     raw_types = read_text(_charge_types_path()) if _charge_types_path() else None
     current_sysfs, choices = _parse_charge_types(raw_types)
